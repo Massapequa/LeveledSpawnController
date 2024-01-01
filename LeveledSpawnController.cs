@@ -205,10 +205,7 @@ namespace Server.Items
 	    IsActive = reader.ReadBool();
 
 	    if (IsActive)
-	    {
-		m_Timer = new InternalTimer(this);
-		m_Timer.Start();
-	    }
+		Reset();
 	}
 
 	private class InternalTimer : Timer
