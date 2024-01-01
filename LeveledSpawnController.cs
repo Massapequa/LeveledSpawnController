@@ -124,6 +124,7 @@ namespace Server.Items
 		    for(int i = 0; i < m_Spawners.Count; i++)
 		    {
 			m_Spawners[i].Running = false;
+   			m_Spawners[i].RemoveSpawned();
 		    }
 		}	
 	    }
