@@ -143,6 +143,13 @@ namespace Server.Items
 		Activate();    
 	    });
 	}
+ 	public void Restart()
+	{
+	    if (IsActive)
+	    	Deactivate();
+
+	    Activate(); 
+	}
 
 	public void NextLevel()
 	{
@@ -206,7 +213,7 @@ namespace Server.Items
 	    IsActive = reader.ReadBool();
 
 	    if (IsActive)
-		Reset();
+		Restart();
 	}
 
 	private class InternalTimer : Timer
