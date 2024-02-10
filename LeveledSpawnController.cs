@@ -78,7 +78,7 @@ namespace Server.Items
 	public override void OnDoubleClick(Mobile from)
 	{
 	    if (!from.HasGump(typeof(SpawnControllerGump)))
-		BaseGump.SendGump( new SpawnControllerGump(from, this));
+		from.SendGump(new SpawnControllerGump(from, this));
 
 	}
 
@@ -102,7 +102,6 @@ namespace Server.Items
 	    	    m_Spawners[0].Running = true;
 		    m_Spawners[0].Respawn();
 		}
-
 	    }
 	}
 
@@ -124,7 +123,7 @@ namespace Server.Items
 		    for(int i = 0; i < m_Spawners.Count; i++)
 		    {
 			m_Spawners[i].Running = false;
-   			m_Spawners[i].RemoveSpawned();
+			m_Spawners[i].RemoveSpawned();
 		    }
 		}	
 	    }
@@ -143,12 +142,18 @@ namespace Server.Items
 		Activate();    
 	    });
 	}
- 	public void Restart()
+
+	public void Restart()
 	{
 	    if (IsActive)
+	    {
 	    	Deactivate();
 
-	    Activate(); 
+	    	Timer.DelayCall(TimeSpan.FromSeconds(5), () => 
+	    	{
+	    	    Activate();
+	    	});
+	    }
 	}
 
 	public void NextLevel()
@@ -212,8 +217,7 @@ namespace Server.Items
 	    m_Cooldown = reader.ReadInt();
 	    IsActive = reader.ReadBool();
 
-	    if (IsActive)
-		Restart();
+	    Restart();
 	}
 
 	private class InternalTimer : Timer
@@ -250,21 +254,23 @@ namespace Server.Items
 	}
     }
 
-    public class SpawnControllerGump : BaseGump
+    public class SpawnControllerGump : Gump
     {
 	private LeveledSpawnController Controller;
 	private Mobile From;
 	private List<Spawner> Spawners;
 
 	public SpawnControllerGump(Mobile from, LeveledSpawnController controller)
-	    : base(from as PlayerMobile, 100, 100)
+	    : base(100, 100)
 	{
 	    From = from;
 	    Controller = controller;
 	    Spawners = controller.Spawners;
+
+	    AddGumpLayout();
 	}
 
-	public override void AddGumpLayout()
+	public void AddGumpLayout()
 	{
 	    AddBackground(0, 0, 350, 555, 0x6DB);
 
@@ -280,14 +286,24 @@ namespace Server.Items
 		AddHtml(130, 70, 400, 16, FormatOptions("Ctrl",  "#F0F8FF"), false, false);
 		AddHtml(210, 70, 400, 16, FormatOptions("Props",  "#F0F8FF"), false, false);
 		AddHtml(290, 70, 400, 16, FormatOptions("Go To",  "#F0F8FF"), false, false);
+
 		for(int i = 0; i < Spawners.Count; i++)
 		{
 		    AddHtml(50, y, 400, 16, FormatOptions(Spawners[i].Name, "#F0F8FF"), false, false);
             	    AddButton(130, y, 0xFA8, 0xFAB, 10 + i, GumpButtonType.Reply, 0);
 		    AddButton(210, y, 0xFAB, 0xFAD, 20 + i, GumpButtonType.Reply, 0);
             	    AddButton(290, y, 0xFB1, 0xFB3, 30 + i, GumpButtonType.Reply, 0);
+
+		    if (i > 0 )
+	            	AddButton(20, y-5, 0x983, 0x984, 40 + i, GumpButtonType.Reply, 0); //up
+
+		    if (i < (Spawners.Count - 1))
+            	    	AddButton(20, y+5, 0x985, 0x986, 50 + i, GumpButtonType.Reply, 0); //down  
+
 		    y += 30;    
 		}
+
+		
 	    }
 
 	    AddHtml(55, 490, 400, 16, FormatOptions(Controller.Active ? "Active" : "Inactive", Controller.Active ?  "#50C878" : "#FF0000"), false, false);
@@ -305,12 +321,11 @@ namespace Server.Items
 	    	return String.Format("<BASEFONT COLOR={1}><dic align=left>{0}</div>", val, color);
 	}
 
-        public override void OnResponse(RelayInfo info)
+        public override void OnResponse(NetState sender, RelayInfo info)
         {
 	    if (info.ButtonID == 1)
 	    {
 		From.Target = new SpawnControllerTarget(Controller);
-		//Refresh();
 	    }
 
 	    if (info.ButtonID == 2)
@@ -320,28 +335,54 @@ namespace Server.Items
 		else
 		    Controller.Deactivate();	
 
-		Refresh();
+		From.SendGump(new SpawnControllerGump(From, Controller));
 	    }
 
 	    if (info.ButtonID > 9 && info.ButtonID < 20)
 	    {
 		BaseGump.SendGump(new SpawnerGump(From, Controller.Spawners[info.ButtonID - 10]));
-		Refresh();
+		//From.SendGump(new SpawnerGump(From, Controller.Spawners[info.ButtonID - 10])); // for older version without BaseGump
+		From.SendGump(new SpawnControllerGump(From, Controller));
 	    }
 
 	    if (info.ButtonID > 19 && info.ButtonID < 30)
 	    {
 		From.SendGump(new PropertiesGump(From, Controller.Spawners[info.ButtonID - 20]));
-		Refresh();
+		From.SendGump(new SpawnControllerGump(From, Controller));
 	    }
 
 	    if (info.ButtonID > 29 && info.ButtonID < 40)
 	    {
 		Item item = Controller.Spawners[info.ButtonID - 30];
 		From.MoveToWorld(item.Location, item.Map);
-		Refresh();
+		From.SendGump(new SpawnControllerGump(From, Controller));
 	    }
 
+	    if (info.ButtonID > 39 && info.ButtonID < 50) //up
+	    {
+		if (!Controller.Active)
+		{
+		    Spawner spawner = Controller.Spawners[info.ButtonID - 40];
+		    Controller.Spawners.RemoveAt(info.ButtonID - 40);
+		    Controller.Spawners.Insert(info.ButtonID - 41, spawner);
+		    From.SendGump(new SpawnControllerGump(From, Controller));
+		}
+		else
+		    From.SendMessage("You cannot do that while the Controller is active.");
+	    }
+
+	    if (info.ButtonID > 49 && info.ButtonID < 60) //down
+	    {
+		if (!Controller.Active)
+		{
+		    Spawner spawner = Controller.Spawners[info.ButtonID - 50];
+		    Controller.Spawners.RemoveAt(info.ButtonID - 50);
+		    Controller.Spawners.Insert(info.ButtonID - 49, spawner);
+		    From.SendGump(new SpawnControllerGump(From, Controller));
+		}
+		else
+		    From.SendMessage("You cannot do that while the Controller is active.");
+	    }
 	}
     }
 
@@ -372,7 +413,7 @@ namespace Server.Items
 		    from.SendMessage("The spawner list is full.");	
 	    }
 
-	    BaseGump.SendGump(new SpawnControllerGump(from as PlayerMobile, Controller));
+	    from.SendGump(new SpawnControllerGump(from, Controller));
 	}
     }
 }
